@@ -20,6 +20,7 @@
 #include "TFRCTPowerClient.h"
 
 #include <math.h>
+#include <errno.h>
 #include <lwip/sockets.h>
 
 #include "TFNetwork.h"
