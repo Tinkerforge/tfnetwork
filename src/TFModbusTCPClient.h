@@ -79,6 +79,7 @@ struct TFModbusTCPClientTransaction
     void *buffer;
     micros_t timeout;
     TFModbusTCPClientTransactionCallback callback;
+    uint16_t transaction_id_mask;
     TFModbusTCPClientTransaction *next;
 };
 
@@ -93,7 +94,8 @@ public:
                   uint16_t data_count,
                   void *buffer,
                   micros_t timeout,
-                  TFModbusTCPClientTransactionCallback &&callback);
+                  TFModbusTCPClientTransactionCallback &&callback,
+                  uint16_t transaction_id_mask = UINT16_MAX);
 
 private:
     void close_hook() override;
@@ -130,9 +132,10 @@ public:
                   uint16_t data_count,
                   void *buffer,
                   micros_t timeout,
-                  TFModbusTCPClientTransactionCallback &&callback)
+                  TFModbusTCPClientTransactionCallback &&callback,
+                  uint16_t transaction_id_mask = UINT16_MAX)
     {
-        client->transact(unit_id, function_code, start_address, data_count, buffer, timeout, std::move(callback));
+        client->transact(unit_id, function_code, start_address, data_count, buffer, timeout, std::move(callback), transaction_id_mask);
     }
 
 private:

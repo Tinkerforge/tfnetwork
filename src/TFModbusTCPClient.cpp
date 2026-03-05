@@ -132,7 +132,8 @@ void TFModbusTCPClient::transact(uint8_t unit_id,
                                  uint16_t data_count,
                                  void *buffer,
                                  micros_t timeout,
-                                 TFModbusTCPClientTransactionCallback &&callback)
+                                 TFModbusTCPClientTransactionCallback &&callback,
+                                 uint16_t transaction_id_mask /*= UINT16_MAX*/)
 {
     if (!callback) {
         return;
@@ -257,14 +258,15 @@ void TFModbusTCPClient::transact(uint8_t unit_id,
 
     TFModbusTCPClientTransaction *transaction = new TFModbusTCPClientTransaction;
 
-    transaction->unit_id       = unit_id;
-    transaction->function_code = function_code;
-    transaction->start_address = start_address;
-    transaction->data_count    = data_count;
-    transaction->buffer        = buffer;
-    transaction->timeout       = timeout;
-    transaction->callback      = std::move(callback);
-    transaction->next          = nullptr;
+    transaction->unit_id             = unit_id;
+    transaction->function_code       = function_code;
+    transaction->start_address       = start_address;
+    transaction->data_count          = data_count;
+    transaction->buffer              = buffer;
+    transaction->timeout             = timeout;
+    transaction->callback            = std::move(callback);
+    transaction->transaction_id_mask = transaction_id_mask;
+    transaction->next                = nullptr;
 
     *tail_ptr = transaction;
 }
@@ -283,7 +285,7 @@ void TFModbusTCPClient::tick_hook()
         pending_transaction          = scheduled_transaction_head;
         scheduled_transaction_head   = scheduled_transaction_head->next;
         pending_transaction->next    = nullptr;
-        pending_transaction_id       = next_transaction_id++;
+        pending_transaction_id       = (next_transaction_id++) & pending_transaction->transaction_id_mask;
         pending_transaction_deadline = calculate_deadline(pending_transaction->timeout);
 
         TFModbusTCPRequest request;
