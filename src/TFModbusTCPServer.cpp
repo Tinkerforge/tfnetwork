@@ -61,13 +61,13 @@ const char *get_tf_modbus_tcp_server_client_disconnect_reason_name(TFModbusTCPSe
 }
 
 // non-reentrant
-bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
+bool TFModbusTCPServer::start(uint32_t bind_address, uint16_t port,
                               TFModbusTCPServerConnectCallback &&connect_callback,
                               TFModbusTCPServerDisconnectCallback &&disconnect_callback,
                               TFModbusTCPServerRequestCallback &&request_callback)
 {
-    char bind_address_str[TF_NETWORK_IP_NTOA_BUFFER_LENGTH];
-    TFNetwork::ip_ntoa(bind_address_str, sizeof(bind_address_str), bind_address);
+    char bind_address_str[TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH];
+    TFNetwork::ipv4_ntoa(bind_address_str, sizeof(bind_address_str), bind_address);
 
     if (non_reentrant) {
         debugfln("start(bind_address=%s port=%u) non-reentrant", bind_address_str, port);
@@ -94,9 +94,7 @@ bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
         return false;
     }
 
-    // Use AF_INET6 with IPV6_V6ONLY=0 for dual-stack: accepts both IPv4 and IPv6 connections.
-    // IPv4 clients appear as IPv4-mapped IPv6 addresses (::ffff:x.x.x.x).
-    int pending_fd = socket(AF_INET6, SOCK_STREAM, 0);
+    int pending_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (pending_fd < 0) {
         int saved_errno = errno;
@@ -104,19 +102,6 @@ bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) socket() failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
-        errno = saved_errno;
-        return false;
-    }
-
-    int v6only = 0;
-
-    if (setsockopt(pending_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) < 0) {
-        int saved_errno = errno;
-
-        debugfln("start(bind_address=%s port=%u) setsockopt(IPV6_V6ONLY) failed: %s (%d)",
-                 bind_address_str, port, strerror(saved_errno), saved_errno);
-
-        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -129,7 +114,6 @@ bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) setsockopt(SO_REUSEADDR) failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
-        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -142,7 +126,6 @@ bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) fcntl(F_GETFL) failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
-        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -153,35 +136,24 @@ bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) fcntl(F_SETFL) failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
-        close(pending_fd);
         errno = saved_errno;
         return false;
     }
 
-    struct sockaddr_in6 addr_in6;
+    struct sockaddr_in addr_in;
 
-    memset(&addr_in6, 0, sizeof(addr_in6));
+    memset(&addr_in, 0, sizeof(addr_in));
+    memcpy(&addr_in.sin_addr.s_addr, &bind_address, sizeof(bind_address));
 
-    addr_in6.sin6_family = AF_INET6;
-    addr_in6.sin6_port   = htons(port);
+    addr_in.sin_family = AF_INET;
+    addr_in.sin_port   = htons(port);
 
-    if (bind_address == nullptr) {
-        // nullptr means bind to any address (in6addr_any is all zeros, already set by memset)
-    } else if (IP_IS_V6(bind_address)) {
-        memcpy(&addr_in6.sin6_addr, ip_2_ip6(bind_address), sizeof(addr_in6.sin6_addr));
-    } else {
-        // Map IPv4 bind address to IPv4-mapped IPv6 (::ffff:x.x.x.x)
-        addr_in6.sin6_addr.un.u32_addr[2] = htonl(0xFFFF);
-        addr_in6.sin6_addr.un.u32_addr[3] = ip4_addr_get_u32(ip_2_ip4(bind_address));
-    }
-
-    if (bind(pending_fd, (struct sockaddr *)&addr_in6, sizeof(addr_in6)) < 0) {
+    if (bind(pending_fd, (struct sockaddr *)&addr_in, sizeof(addr_in)) < 0) {
         int saved_errno = errno;
 
         debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
-        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -192,7 +164,6 @@ bool TFModbusTCPServer::start(const ip_addr_t *bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) listen() failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
-        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -291,33 +262,23 @@ void TFModbusTCPServer::tick()
     }
 
     if (readable_fd_count > 0 && FD_ISSET(server_fd, &fdset)) {
-        struct sockaddr_in6 addr_in6;
-        socklen_t addr_in6_length = sizeof(addr_in6);
-        int socket_fd             = accept(server_fd, reinterpret_cast<struct sockaddr *>(&addr_in6), &addr_in6_length);
+        struct sockaddr_in addr_in;
+        socklen_t addr_in_length = sizeof(addr_in);
+        int socket_fd            = accept(server_fd, reinterpret_cast<struct sockaddr *>(&addr_in), &addr_in_length);
 
         if (socket_fd < 0) {
             debugfln("tick() accept() failed: %s (%d)", strerror(errno), errno);
             return;
         }
 
-        // Extract ip_addr_t from sockaddr_in6. IPv4 clients appear as IPv4-mapped
-        // IPv6 addresses (::ffff:x.x.x.x), which we convert back to an IPv4 ip_addr_t.
-        ip_addr_t peer_address;
+        uint32_t peer_address = addr_in.sin_addr.s_addr;
+        uint16_t port         = ntohs(addr_in.sin_port);
 
-        if (IN6_IS_ADDR_V4MAPPED(&addr_in6.sin6_addr)) {
-            ip_addr_set_ip4_u32_val(peer_address, addr_in6.sin6_addr.un.u32_addr[3]);
-        } else {
-            memcpy(ip_2_ip6(&peer_address), &addr_in6.sin6_addr, sizeof(ip6_addr_t));
-            IP_SET_TYPE_VAL(peer_address, IPADDR_TYPE_V6);
-        }
-
-        uint16_t port = ntohs(addr_in6.sin6_port);
-
-        char peer_address_str[TF_NETWORK_IP_NTOA_BUFFER_LENGTH];
-        TFNetwork::ip_ntoa(peer_address_str, sizeof(peer_address_str), &peer_address);
+        char peer_address_str[TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH];
+        TFNetwork::ipv4_ntoa(peer_address_str, sizeof(peer_address_str), peer_address);
 
         debugfln("tick() accepting connection (socket_fd=%d peer_address=%s port=%u)", socket_fd, peer_address_str, port);
-        connect_callback(&peer_address, port);
+        connect_callback(peer_address, port);
 
         TFModbusTCPServerClientNode *node_prev = nullptr;
         TFModbusTCPServerClientNode *node      = &client_sentinel;
@@ -347,7 +308,7 @@ void TFModbusTCPServer::tick()
 
             shutdown(socket_fd, SHUT_RDWR);
             close(socket_fd);
-            disconnect_callback(&peer_address, port, TFModbusTCPServerDisconnectReason::NoFreeClient, -1);
+            disconnect_callback(peer_address, port, TFModbusTCPServerDisconnectReason::NoFreeClient, -1);
         }
         else {
             TFModbusTCPServerClient *client = new TFModbusTCPServerClient;
@@ -881,7 +842,7 @@ void TFModbusTCPServer::disconnect(TFModbusTCPServerClient *client, TFModbusTCPS
 {
     shutdown(client->socket_fd, SHUT_RDWR);
     close(client->socket_fd);
-    disconnect_callback(&client->peer_address, client->port, reason, error_number);
+    disconnect_callback(client->peer_address, client->port, reason, error_number);
     delete client;
 }
 
