@@ -23,6 +23,11 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <functional>
+#include <lwip/ip_addr.h>
+
+// lwip's ip4_addr.h defines ip_ntoa as a backwards-compatibility macro.
+// Undefine it to avoid collision with TFNetwork::ip_ntoa().
+#undef ip_ntoa
 
 #if TF_NETWORK_DEBUG_LOG
 #define tf_network_debugfln(fmt, ...) TFNetwork::logfln(fmt __VA_OPT__(,) __VA_ARGS__)
@@ -31,9 +36,10 @@
 #endif
 
 #define TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH 16
+#define TF_NETWORK_IP_NTOA_BUFFER_LENGTH   46
 
 typedef std::function<void(const char *fmt, va_list args)> TFNetworkVLogFLnFunction;
-typedef std::function<void(uint32_t address, int error_number)> TFNetworkResolveResultCallback;
+typedef std::function<void(const ip_addr_t *address, int error_number)> TFNetworkResolveResultCallback;
 typedef std::function<void(const char *host, TFNetworkResolveResultCallback &&callback)> TFNetworkResolveFunction;
 typedef std::function<uint16_t()> TFNetworkGetRandomUint16Function;
 
@@ -59,4 +65,5 @@ namespace TFNetwork
     };
 
     char *ipv4_ntoa(char *buffer, size_t buffer_length, uint32_t address);
+    char *ip_ntoa(char *buffer, size_t buffer_length, const ip_addr_t *address);
 };

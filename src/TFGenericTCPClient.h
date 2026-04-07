@@ -24,6 +24,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <functional>
+#include <lwip/ip_addr.h>
 #include <TFTools/Micros.h>
 
 // configuration
@@ -144,10 +145,11 @@ protected:
     TFGenericTCPClientConnectCallback connect_callback;
     TFGenericTCPClientDisconnectCallback pending_disconnect_callback;
     TFGenericTCPClientDisconnectCallback disconnect_callback;
-    bool resolve_pending          = false;
-    uint32_t resolve_id           = 0;
-    uint32_t pending_host_address = 0; // IPv4 only
-    int pending_socket_fd         = -1;
+    bool resolve_pending               = false;
+    uint32_t resolve_id                = 0;
+    ip_addr_t pending_host_address;
+    bool pending_host_address_valid    = false;
+    int pending_socket_fd              = -1;
     micros_t connect_deadline     = 0_s;
     int socket_fd                 = -1;
 };

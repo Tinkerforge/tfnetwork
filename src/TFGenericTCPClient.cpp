@@ -300,16 +300,16 @@ void TFGenericTCPClient::tick()
     tick_hook();
 
     if (host != nullptr && socket_fd < 0) {
-        if (!resolve_pending && pending_host_address == 0 && pending_socket_fd < 0) {
+        if (!resolve_pending && !pending_host_address_valid && pending_socket_fd < 0) {
             resolve_pending             = true;
             uint32_t current_resolve_id = ++resolve_id;
 
             debugfln("tick() resolving (host=%s current_resolve_id=%u)", host, current_resolve_id);
 
             TFNetwork::resolve(host,
-            [this, current_resolve_id](uint32_t address, int error_number) {
-                char address_str[TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH];
-                TFNetwork::ipv4_ntoa(address_str, sizeof(address_str), address);
+            [this, current_resolve_id](const ip_addr_t *address, int error_number) {
+                char address_str[TF_NETWORK_IP_NTOA_BUFFER_LENGTH];
+                TFNetwork::ip_ntoa(address_str, sizeof(address_str), address);
 
                 debugfln("tick() resolved (resolve_pending=%d current_resolve_id=%u resolve_id=%u address=%s error_number=%d)",
                          static_cast<int>(resolve_pending), current_resolve_id, resolve_id, address_str, error_number);
@@ -318,26 +318,31 @@ void TFGenericTCPClient::tick()
                     return;
                 }
 
-                if (address == 0) {
+                if (address == nullptr) {
                     abort_connect(TFGenericTCPClientConnectResult::ResolveFailed, error_number);
                     return;
                 }
 
                 resolve_pending = false;
-                pending_host_address = address;
+                pending_host_address = *address;
+                pending_host_address_valid = true;
             });
         }
 
         if (pending_socket_fd < 0) {
-            if (pending_host_address == 0) {
+            if (!pending_host_address_valid) {
                 return; // Waiting for resolve callback
             }
 
-            char pending_host_address_str[TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH];
-            TFNetwork::ipv4_ntoa(pending_host_address_str, sizeof(pending_host_address_str), pending_host_address);
+            char pending_host_address_str[TF_NETWORK_IP_NTOA_BUFFER_LENGTH];
+            TFNetwork::ip_ntoa(pending_host_address_str, sizeof(pending_host_address_str), &pending_host_address);
 
             debugfln("tick() connecting (host=%s pending_host_address=%s)", host, pending_host_address_str);
-            pending_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+            // Choose address family based on resolved address type
+            int af = IP_IS_V6(&pending_host_address) ? AF_INET6 : AF_INET;
+
+            pending_socket_fd = socket(af, SOCK_STREAM, 0);
 
             if (pending_socket_fd < 0) {
                 abort_connect(TFGenericTCPClientConnectResult::SocketCreateFailed, errno);
@@ -356,17 +361,35 @@ void TFGenericTCPClient::tick()
                 return;
             }
 
-            struct sockaddr_in addr_in;
+            int connect_result;
 
-            memset(&addr_in, 0, sizeof(addr_in));
-            memcpy(&addr_in.sin_addr.s_addr, &pending_host_address, sizeof(pending_host_address));
+            if (af == AF_INET6) {
+                struct sockaddr_in6 addr_in6;
 
-            addr_in.sin_family = AF_INET;
-            addr_in.sin_port   = htons(port);
+                memset(&addr_in6, 0, sizeof(addr_in6));
+                memcpy(&addr_in6.sin6_addr, ip_2_ip6(&pending_host_address), sizeof(addr_in6.sin6_addr));
 
-            pending_host_address = 0;
+                addr_in6.sin6_family = AF_INET6;
+                addr_in6.sin6_port   = htons(port);
 
-            if (::connect(pending_socket_fd, reinterpret_cast<struct sockaddr *>(&addr_in), sizeof(addr_in)) < 0 && errno != EINPROGRESS) {
+                pending_host_address_valid = false;
+
+                connect_result = ::connect(pending_socket_fd, reinterpret_cast<struct sockaddr *>(&addr_in6), sizeof(addr_in6));
+            } else {
+                struct sockaddr_in addr_in;
+
+                memset(&addr_in, 0, sizeof(addr_in));
+                addr_in.sin_addr.s_addr = ip4_addr_get_u32(ip_2_ip4(&pending_host_address));
+
+                addr_in.sin_family = AF_INET;
+                addr_in.sin_port   = htons(port);
+
+                pending_host_address_valid = false;
+
+                connect_result = ::connect(pending_socket_fd, reinterpret_cast<struct sockaddr *>(&addr_in), sizeof(addr_in));
+            }
+
+            if (connect_result < 0 && errno != EINPROGRESS) {
                 abort_connect(TFGenericTCPClientConnectResult::SocketConnectFailed, errno);
                 return;
             }
@@ -458,7 +481,7 @@ void TFGenericTCPClient::close()
     pending_disconnect_callback = nullptr;
     disconnect_callback = nullptr;
     resolve_pending = false;
-    pending_host_address = 0;
+    pending_host_address_valid = false;
 
     close_hook();
 }
