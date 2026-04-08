@@ -24,6 +24,7 @@
 #include <TFTools/Micros.h>
 
 #include "TFModbusTCPCommon.h"
+#include "lwip/ip_addr.h"
 
 // configuration
 #ifndef TF_MODBUS_TCP_SERVER_MAX_CLIENT_COUNT
@@ -60,9 +61,9 @@ enum class TFModbusTCPServerDisconnectReason
 
 const char *get_tf_modbus_tcp_server_client_disconnect_reason_name(TFModbusTCPServerDisconnectReason reason);
 
-typedef std::function<void(uint32_t peer_address, uint16_t port)> TFModbusTCPServerConnectCallback;
+typedef std::function<void(const ip_addr_t *peer_address, uint16_t port)> TFModbusTCPServerConnectCallback;
 
-typedef std::function<void(uint32_t peer_address, uint16_t port, TFModbusTCPServerDisconnectReason reason, int error_number)> TFModbusTCPServerDisconnectCallback;
+typedef std::function<void(const ip_addr_t * peer_address, uint16_t port, TFModbusTCPServerDisconnectReason reason, int error_number)> TFModbusTCPServerDisconnectCallback;
 
 typedef std::function<TFModbusTCPExceptionCode(uint8_t unit_id,
                                                TFModbusTCPFunctionCode function_code,
@@ -78,7 +79,7 @@ struct TFModbusTCPServerClientNode
 struct TFModbusTCPServerClient : public TFModbusTCPServerClientNode
 {
     int socket_fd;
-    uint32_t peer_address;
+    ip_addr_t peer_address;
     uint16_t port;
     micros_t last_alive;
     TFModbusTCPRequest pending_request;
@@ -96,7 +97,7 @@ public:
     TFModbusTCPServer(TFModbusTCPServer const &other) = delete;
     TFModbusTCPServer &operator=(TFModbusTCPServer const &other) = delete;
 
-    bool start(uint32_t bind_address, uint16_t port,
+    bool start(ip_addr_t * bind_address, uint16_t port,
                TFModbusTCPServerConnectCallback &&connect_callback,
                TFModbusTCPServerDisconnectCallback &&disconnect_callback,
                TFModbusTCPServerRequestCallback &&request_callback); // non-reentrant
