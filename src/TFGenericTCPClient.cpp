@@ -308,7 +308,7 @@ void TFGenericTCPClient::tick()
 
             TFNetwork::resolve(host,
             [this, current_resolve_id](ip_addr_t *address, int error_number) {
-                char address_str[TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH];
+                char address_str[TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH];
                 TFNetwork::ip_addr_ntoa(address_str, sizeof(address_str), address);
 
                 debugfln("tick() resolved (resolve_pending=%d current_resolve_id=%u resolve_id=%u address=%s error_number=%d)",
@@ -365,7 +365,7 @@ void TFGenericTCPClient::tick()
             if (pending_host_address.type == IPADDR_TYPE_V4) {
                 struct sockaddr_in addr_in = {};
 
-                memcpy(&addr_in.sin_addr.s_addr, &pending_host_address, sizeof(pending_host_address));
+                addr_in.sin_addr.s_addr = pending_host_address.u_addr.ip4.addr;
 
                 addr_in.sin_family = AF_INET;
                 addr_in.sin_port   = htons(port);

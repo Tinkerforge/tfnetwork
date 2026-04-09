@@ -144,11 +144,11 @@ bool TFModbusTCPServer::start(ip_addr_t * bind_address, uint16_t port,
         return false;
     }
 
-    if (bind_address->type != IPADDR_TYPE_V4) {
+    if (bind_address->type == IPADDR_TYPE_V4) {
         struct sockaddr_in addr_in;
 
         memset(&addr_in, 0, sizeof(addr_in));
-        memcpy(&addr_in.sin_addr.s_addr, &bind_address, sizeof(bind_address));
+        addr_in.sin_addr.s_addr = bind_address->u_addr.ip4.addr;
 
         addr_in.sin_family = AF_INET;
         addr_in.sin_port   = htons(port);
@@ -159,16 +159,20 @@ bool TFModbusTCPServer::start(ip_addr_t * bind_address, uint16_t port,
             debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
                      bind_address_str, port, strerror(saved_errno), saved_errno);
 
+            close(pending_fd);
             errno = saved_errno;
             return false;
         }
     } else if (bind_address->type == IPADDR_TYPE_V6) {
         struct sockaddr_in6 addr_in = {};
 
-        memcpy(addr_in.sin6_addr.un.u32_addr, &bind_address->u_addr.ip6.addr, sizeof(uint32_t)*4); // this is a bit scuffed. Does it work?
+        memcpy(addr_in.sin6_addr.un.u32_addr, bind_address->u_addr.ip6.addr, sizeof(uint32_t) * 4);
 
         addr_in.sin6_family = AF_INET6;
         addr_in.sin6_port   = htons(port);
+
+        int v6only = 0;
+        setsockopt(pending_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only));
 
         if (bind(pending_fd, (struct sockaddr *)&addr_in, sizeof(addr_in)) < 0) {
             int saved_errno = errno;
@@ -176,6 +180,7 @@ bool TFModbusTCPServer::start(ip_addr_t * bind_address, uint16_t port,
             debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
                      bind_address_str, port, strerror(saved_errno), saved_errno);
 
+            close(pending_fd);
             errno = saved_errno;
             return false;
         }
@@ -287,9 +292,9 @@ void TFModbusTCPServer::tick()
 
     if (readable_fd_count > 0 && FD_ISSET(server_fd, &fdset)) {
 
-        struct sockaddr_in6 addr_in;
-        socklen_t addr_in_length = sizeof(addr_in);
-        int socket_fd            = accept(server_fd, reinterpret_cast<struct sockaddr *>(&addr_in), &addr_in_length);
+        struct sockaddr_storage addr_storage;
+        socklen_t addr_storage_length = sizeof(addr_storage);
+        int socket_fd = accept(server_fd, reinterpret_cast<struct sockaddr *>(&addr_storage), &addr_storage_length);
 
         if (socket_fd < 0) {
             debugfln("tick() accept() failed: %s (%d)", strerror(errno), errno);
@@ -297,30 +302,31 @@ void TFModbusTCPServer::tick()
         }
 
         ip_addr_t peer_address{};
-        uint16_t port         = ntohs(addr_in.sin6_port);
+        uint16_t port = 0;
 
-        // Handle IPv4-mapped IPv6 addresses and pure IPv6 addresses
-        ip6_addr_t tmp_addr{};
-        memcpy(tmp_addr.addr, addr_in.sin6_addr.un.u32_addr, sizeof(uint32_t)*4); // Scuffed conversion maybe?
+        if (addr_storage.ss_family == AF_INET) {
+            struct sockaddr_in *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr_storage);
+            port = ntohs(addr_in->sin_port);
+            ip_addr_set_ip4_u32_val(peer_address, addr_in->sin_addr.s_addr);
+        } else if (addr_storage.ss_family == AF_INET6) {
+            struct sockaddr_in6 *addr_in6 = reinterpret_cast<struct sockaddr_in6 *>(&addr_storage);
+            port = ntohs(addr_in6->sin6_port);
 
-        if (ip6_addr_isipv4compat(&tmp_addr)) {
-            // IPv4-mapped IPv6 address: convert to IPv4
-            ip_addr_t tmp;
-            IP_ADDR4(&tmp,
-                     addr_in.sin6_addr.un.u32_addr[3] & 0xFF,
-                     (addr_in.sin6_addr.un.u32_addr[3] >> 8) & 0xFF,
-                     (addr_in.sin6_addr.un.u32_addr[3] >> 16) & 0xFF,
-                     (addr_in.sin6_addr.un.u32_addr[3] >> 24) & 0xFF);
-            peer_address = tmp;
-        } else {
-            // Pure IPv6 address
-            ip_addr_t tmp;
-            IP_ADDR6(&tmp,
-                     htonl(addr_in.sin6_addr.un.u32_addr[0]),
-                     htonl(addr_in.sin6_addr.un.u32_addr[1]),
-                     htonl(addr_in.sin6_addr.un.u32_addr[2]),
-                     htonl(addr_in.sin6_addr.un.u32_addr[3]));
-            peer_address = tmp;
+            // Check for IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
+            ip6_addr_t tmp_addr{};
+            memcpy(tmp_addr.addr, addr_in6->sin6_addr.un.u32_addr, sizeof(uint32_t) * 4);
+
+            if (ip6_addr_isipv4mappedipv6(&tmp_addr)) {
+                // IPv4-mapped IPv6 address: extract the IPv4 part
+                ip_addr_set_ip4_u32_val(peer_address, addr_in6->sin6_addr.un.u32_addr[3]);
+            } else {
+                // Pure IPv6 address
+                IP_ADDR6(&peer_address,
+                         addr_in6->sin6_addr.un.u32_addr[0],
+                         addr_in6->sin6_addr.un.u32_addr[1],
+                         addr_in6->sin6_addr.un.u32_addr[2],
+                         addr_in6->sin6_addr.un.u32_addr[3]);
+            }
         }
 
         char peer_address_str[TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH];
