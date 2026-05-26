@@ -19,14 +19,12 @@
 
 #pragma once
 
-#include "lwip/ip_addr.h"
-
-#include <TFTools/Micros.h>
-#include <functional>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <functional>
+#include <TFTools/Micros.h>
 
 // configuration
 #ifndef TF_GENERIC_TCP_CLIENT_MAX_TICK_DURATION
@@ -148,8 +146,7 @@ protected:
     TFGenericTCPClientDisconnectCallback disconnect_callback;
     bool resolve_pending          = false;
     uint32_t resolve_id           = 0;
-    ip_addr_t pending_host_address{};
-    bool pending_host_address_valid = false;
+    uint32_t pending_host_address = 0; // IPv4 only
     int pending_socket_fd         = -1;
     micros_t connect_deadline     = 0_s;
     int socket_fd                 = -1;

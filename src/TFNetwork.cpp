@@ -49,7 +49,8 @@ void TFNetwork::logfln(const char *fmt, ...)
 static void resolve_dummy(const char *host, TFNetworkResolveResultCallback &&callback)
 {
     (void)host;
-    callback(nullptr, ENOSYS);
+
+    callback(0, ENOSYS);
 }
 
 TFNetworkResolveFunction TFNetwork::resolve = resolve_dummy;
@@ -71,14 +72,4 @@ char *TFNetwork::ipv4_ntoa(char *buffer, size_t buffer_length, uint32_t address)
     addr.s_addr = address;
 
     return const_cast<char *>(inet_ntop(AF_INET, &addr, buffer, buffer_length));
-}
-
-char* TFNetwork::ip_addr_ntoa(char *buffer, size_t buffer_length, ip_addr_t *address) {
-    if (buffer_length < 1) {
-        return buffer;
-    }
-    if (address == nullptr) {
-        return buffer;
-    }
-    return ipaddr_ntoa_r(address, buffer, buffer_length);
 }
