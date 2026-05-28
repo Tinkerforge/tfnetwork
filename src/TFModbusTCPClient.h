@@ -100,7 +100,7 @@ public:
 private:
     void close_hook() override;
     void tick_hook() override;
-    bool receive_hook() override;
+    bool recv_hook() override;
 
     ssize_t receive_response_payload(size_t length);
     void finish_pending_transaction(uint16_t transaction_id, TFModbusTCPClientTransactionResult result, const char *error_message);

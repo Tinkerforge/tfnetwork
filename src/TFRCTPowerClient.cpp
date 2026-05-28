@@ -179,7 +179,7 @@ void TFRCTPowerClient::tick_hook()
     }
 }
 
-bool TFRCTPowerClient::receive_hook()
+bool TFRCTPowerClient::recv_hook()
 {
     micros_t deadline = calculate_deadline(10_ms);
 

@@ -64,7 +64,8 @@ public:
 private:
     void close_hook() override;
     void tick_hook() override;
-    bool receive_hook() override;
+    bool recv_hook() override;
+
     void finish_pending_transaction(TFRCTPowerClientTransactionResult result, float value);
     void finish_all_transactions(TFRCTPowerClientTransactionResult result);
     void check_pending_transaction_timeout();

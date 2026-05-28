@@ -432,7 +432,7 @@ void TFGenericTCPClient::tick()
     while (socket_fd >= 0 && (!deadline_elapsed(tick_deadline) || first)) {
         first = false;
 
-        if (!receive_hook()) {
+        if (!recv_hook()) {
             return;
         }
     }

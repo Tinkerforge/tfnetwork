@@ -127,9 +127,9 @@ public:
     void tick(); // non-reentrant
 
 protected:
-    virtual void close_hook()   = 0;
-    virtual void tick_hook()    = 0;
-    virtual bool receive_hook() = 0;
+    virtual void close_hook() = 0;
+    virtual void tick_hook()  = 0;
+    virtual bool recv_hook()  = 0;
 
     void close();
     bool send(const uint8_t *buffer, size_t length);

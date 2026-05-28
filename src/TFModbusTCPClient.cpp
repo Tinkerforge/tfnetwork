@@ -386,7 +386,7 @@ void TFModbusTCPClient::tick_hook()
     }
 }
 
-bool TFModbusTCPClient::receive_hook()
+bool TFModbusTCPClient::recv_hook()
 {
     char error_message[128];
 
@@ -429,7 +429,7 @@ bool TFModbusTCPClient::receive_hook()
         }
 
         if (pending_response.header.frame_length > TF_MODBUS_TCP_MAX_RESPONSE_FRAME_LENGTH) {
-            debugfln("receive_hook() frame too long (pending_response.header.frame_length=%u max_response_frame_length=%u)",
+            debugfln("recv_hook() frame too long (pending_response.header.frame_length=%u max_response_frame_length=%u)",
                      pending_response.header.frame_length, TF_MODBUS_TCP_MAX_RESPONSE_FRAME_LENGTH);
 
             snprintf(error_message, sizeof(error_message), "Actual length is %u, maximum is %u", pending_response.header.frame_length, TF_MODBUS_TCP_MAX_RESPONSE_FRAME_LENGTH);
@@ -476,14 +476,14 @@ bool TFModbusTCPClient::receive_hook()
             return false;
         }
 
-        debugfln("receive_hook() appending trailing data to payload (pending_response.header.frame_length=%u+%zd)",
+        debugfln("recv_hook() appending trailing data to payload (pending_response.header.frame_length=%u+%zd)",
                  pending_response.header.frame_length, result);
 
         pending_response.header.frame_length += result;
     }
 
     if (pending_response.header.frame_length < TF_MODBUS_TCP_MIN_RESPONSE_FRAME_LENGTH) {
-        debugfln("receive_hook() frame too short (pending_response.header.frame_length=%u min_response_frame_length=%u",
+        debugfln("recv_hook() frame too short (pending_response.header.frame_length=%u min_response_frame_length=%u",
                  pending_response.header.frame_length, TF_MODBUS_TCP_MIN_RESPONSE_FRAME_LENGTH);
 
         snprintf(error_message, sizeof(error_message), "Actual length is %u, minimum is %u", pending_response.header.frame_length, TF_MODBUS_TCP_MIN_RESPONSE_FRAME_LENGTH);
@@ -493,14 +493,14 @@ bool TFModbusTCPClient::receive_hook()
     }
 
     if (pending_transaction == nullptr) {
-        debugfln("receive_hook() no pending transaction for response");
+        debugfln("recv_hook() no pending transaction for response");
 
         reset_pending_response();
         return true;
     }
 
     if (pending_transaction_id != pending_response.header.transaction_id) {
-        debugfln("receive_hook() transaction ID mismatch (pending_response.header.transaction_id=%u pending_transaction_id=%u)",
+        debugfln("recv_hook() transaction ID mismatch (pending_response.header.transaction_id=%u pending_transaction_id=%u)",
                  pending_transaction_id, pending_response.header.transaction_id);
 
         reset_pending_response();
@@ -508,7 +508,7 @@ bool TFModbusTCPClient::receive_hook()
     }
 
     if (pending_transaction->unit_id != pending_response.header.unit_id) {
-        debugfln("receive_hook() unit ID mismatch (pending_response.header.unit_id=%u pending_transaction->unit_id=%u)",
+        debugfln("recv_hook() unit ID mismatch (pending_response.header.unit_id=%u pending_transaction->unit_id=%u)",
                  pending_response.header.unit_id, pending_transaction->unit_id);
 
         snprintf(error_message, sizeof(error_message), "Actual unit ID is %u, expected is %u", pending_response.header.unit_id, pending_transaction->unit_id);
@@ -518,7 +518,7 @@ bool TFModbusTCPClient::receive_hook()
     }
 
     if (pending_transaction->function_code != static_cast<TFModbusTCPFunctionCode>(pending_response.payload.function_code & 0x7F)) {
-        debugfln("receive_hook() function code mismatch (pending_response.payload.function_code=0x%02x pending_transaction->function_code=0x%02x)",
+        debugfln("recv_hook() function code mismatch (pending_response.payload.function_code=0x%02x pending_transaction->function_code=0x%02x)",
                  pending_response.payload.function_code, static_cast<uint8_t>(pending_transaction->function_code));
 
         snprintf(error_message, sizeof(error_message), "Actual function code is 0x%02x, expected is 0x%02x or 0x%02x",
@@ -529,7 +529,7 @@ bool TFModbusTCPClient::receive_hook()
     }
 
     if ((pending_response.payload.function_code & 0x80) != 0) {
-        debugfln("receive_hook() error response (pending_response.payload.exception_code=0x%02x)", pending_response.payload.exception_code);
+        debugfln("recv_hook() error response (pending_response.payload.exception_code=0x%02x)", pending_response.payload.exception_code);
 
         reset_pending_response();
         finish_pending_transaction(static_cast<TFModbusTCPClientTransactionResult>(pending_response.payload.exception_code), nullptr);
@@ -617,7 +617,7 @@ bool TFModbusTCPClient::receive_hook()
     }
 
     if (pending_response_payload_used < expected_payload_length) {
-        debugfln("receive_hook() payload too short (pending_response_payload_used=%zu expected_payload_length=%zu)",
+        debugfln("recv_hook() payload too short (pending_response_payload_used=%zu expected_payload_length=%zu)",
                  pending_response_payload_used, expected_payload_length);
 
         snprintf(error_message, sizeof(error_message), "Actual length is %zu, expected is %zu", pending_response_payload_used, expected_payload_length);
@@ -628,13 +628,13 @@ bool TFModbusTCPClient::receive_hook()
 
     if (pending_response_payload_used > expected_payload_length) {
         // Intentionally accept too long responses
-        debugfln("receive_hook() accepting excess payload length (excess_payload_length=%zu)",
+        debugfln("recv_hook() accepting excess payload length (excess_payload_length=%zu)",
                  pending_response_payload_used - expected_payload_length);
     }
 
     if (expected_byte_count > 0) {
         if (pending_response.payload.byte_count != expected_byte_count) {
-            debugfln("receive_hook() byte count mismatch (pending_response.payload.byte_count=%u expected_byte_count=%u)",
+            debugfln("recv_hook() byte count mismatch (pending_response.payload.byte_count=%u expected_byte_count=%u)",
                      pending_response.payload.byte_count, expected_byte_count);
 
             snprintf(error_message, sizeof(error_message), "Actual byte count is %u, expected is %u", pending_response.payload.byte_count, expected_byte_count);
@@ -668,7 +668,7 @@ bool TFModbusTCPClient::receive_hook()
         uint16_t actual_start_address = ntohs(pending_response.payload.start_address);
 
         if (actual_start_address != pending_transaction->start_address) {
-            debugfln("receive_hook() start address mismatch (pending_response.payload.start_address=%u pending_transaction->start_address=%u)",
+            debugfln("recv_hook() start address mismatch (pending_response.payload.start_address=%u pending_transaction->start_address=%u)",
                      actual_start_address, pending_transaction->start_address);
 
             snprintf(error_message, sizeof(error_message), "Actual start address is %u, expected is %u", actual_start_address, pending_transaction->start_address);
@@ -682,7 +682,7 @@ bool TFModbusTCPClient::receive_hook()
         uint16_t actual_data_value = ntohs(pending_response.payload.data_value);
 
         if (actual_data_value != expected_data_value) {
-            debugfln("receive_hook() data value mismatch (pending_response.payload.data_value=%u expected_data_value=%u)",
+            debugfln("recv_hook() data value mismatch (pending_response.payload.data_value=%u expected_data_value=%u)",
                      actual_data_value, expected_data_value);
 
             snprintf(error_message, sizeof(error_message), "Actual data value is %u, expected is %u", actual_data_value, expected_data_value);
@@ -696,7 +696,7 @@ bool TFModbusTCPClient::receive_hook()
         uint16_t actual_data_count = ntohs(pending_response.payload.data_count);
 
         if (actual_data_count != pending_transaction->data_count) {
-            debugfln("receive_hook() data count mismatch (pending_response.payload.data_count=%u pending_transaction->data_count=%u)",
+            debugfln("recv_hook() data count mismatch (pending_response.payload.data_count=%u pending_transaction->data_count=%u)",
                      actual_data_count, pending_transaction->data_count);
 
             snprintf(error_message, sizeof(error_message), "Actual data count is %u, expected is %u", actual_data_count, pending_transaction->data_count);
@@ -710,7 +710,7 @@ bool TFModbusTCPClient::receive_hook()
         uint16_t actual_and_mask = ntohs(pending_response.payload.and_mask);
 
         if (actual_and_mask != expected_and_mask) {
-            debugfln("receive_hook() AND mask mismatch (pending_response.payload.and_mask=%u expected_and_mask=%u)",
+            debugfln("recv_hook() AND mask mismatch (pending_response.payload.and_mask=%u expected_and_mask=%u)",
                      actual_and_mask, expected_and_mask);
 
             snprintf(error_message, sizeof(error_message), "Actual AND mask is %u, expected is %u", actual_and_mask, expected_and_mask);
@@ -723,7 +723,7 @@ bool TFModbusTCPClient::receive_hook()
         uint16_t actual_or_mask  = ntohs(pending_response.payload.or_mask);
 
         if (actual_or_mask != expected_or_mask) {
-            debugfln("receive_hook() OR mask mismatch (pending_response.payload.or_mask=%u expected_or_mask=%u)",
+            debugfln("recv_hook() OR mask mismatch (pending_response.payload.or_mask=%u expected_or_mask=%u)",
                      actual_or_mask, expected_or_mask);
 
             snprintf(error_message, sizeof(error_message), "Actual OR mask is %u, expected is %u", actual_or_mask, expected_or_mask);
