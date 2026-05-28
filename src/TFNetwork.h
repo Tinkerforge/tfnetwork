@@ -19,12 +19,11 @@
 
 #pragma once
 
-#include "lwip/ip_addr.h"
-
 #include <functional>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <lwip/ip_addr.h>
 
 // TF_NETWORK_DEBUG_LOG 0 or undefined = debug logging is off
 // TF_NETWORK_DEBUG_LOG 1 = debug logging is on
@@ -36,8 +35,7 @@
 #define tf_network_debugfln(fmt, ...) do {} while (0)
 #endif
 
-#define TF_NETWORK_IPV4_NTOA_BUFFER_LENGTH 16
-#define TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH 46
+#define TF_NETWORK_IP_ADDR_NTOA_BUFFER_LENGTH INET6_ADDRSTRLEN
 
 typedef std::function<void(const char *fmt, va_list args)> TFNetworkVLogFLnFunction;
 typedef std::function<void(ip_addr_t *address, int error_number)> TFNetworkResolveResultCallback;
@@ -65,7 +63,5 @@ namespace TFNetwork
         bool *non_reentrant;
     };
 
-    char *ipv4_ntoa(char *buffer, size_t buffer_length, uint32_t address);
-    char* ip_addr_ntoa(char *buffer, size_t buffer_length, ip_addr_t *address);
-    //            using ipaddr_ntoa_r(). Note: do NOT name it ip_ntoa — that collides with a lwip macro.
+    void ip_addr_ntoa(char *buffer, size_t buffer_length, ip_addr_t *address);
 };

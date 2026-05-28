@@ -61,11 +61,12 @@ const char *get_tf_modbus_tcp_server_client_disconnect_reason_name(TFModbusTCPSe
 }
 
 // non-reentrant
-bool TFModbusTCPServer::start(ip_addr_t * bind_address, uint16_t port,
+bool TFModbusTCPServer::start(ip_addr_t *bind_address, uint16_t port,
                               TFModbusTCPServerConnectCallback &&connect_callback,
                               TFModbusTCPServerDisconnectCallback &&disconnect_callback,
-                              TFModbusTCPServerRequestCallback &&request_callback) {
-    char bind_address_str[TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH];
+                              TFModbusTCPServerRequestCallback &&request_callback)
+{
+    char bind_address_str[TF_NETWORK_IP_ADDR_NTOA_BUFFER_LENGTH];
     TFNetwork::ip_addr_ntoa(bind_address_str, sizeof(bind_address_str), bind_address);
 
     if (non_reentrant) {
@@ -93,12 +94,22 @@ bool TFModbusTCPServer::start(ip_addr_t * bind_address, uint16_t port,
         return false;
     }
 
-    int pending_fd = -1;
+    int family;
+
     if (bind_address->type == IPADDR_TYPE_V4) {
-        pending_fd = socket(AF_INET, SOCK_STREAM, 0);
-    } else if (bind_address->type == IPADDR_TYPE_V6) {
-        pending_fd = socket(AF_INET6, SOCK_STREAM, 0);
+        family = AF_INET;
     }
+    else if (bind_address->type == IPADDR_TYPE_V6) {
+        family = AF_INET6;
+    }
+    else {
+        debugfln("start(bind_address=%s port=%u) invalid bind address type", bind_address_str, port);
+
+        errno = EINVAL;
+        return false;
+    }
+
+    int pending_fd = socket(family, SOCK_STREAM, 0);
 
     if (pending_fd < 0) {
         int saved_errno = errno;
@@ -147,46 +158,53 @@ bool TFModbusTCPServer::start(ip_addr_t * bind_address, uint16_t port,
         return false;
     }
 
+    struct sockaddr_in addr_in;
+    struct sockaddr_in6 addr_in6;
+    struct sockaddr *addr;
+    socklen_t addr_len;
+
     if (bind_address->type == IPADDR_TYPE_V4) {
-        struct sockaddr_in addr_in;
-
         memset(&addr_in, 0, sizeof(addr_in));
-        addr_in.sin_addr.s_addr = bind_address->u_addr.ip4.addr;
 
+        addr_in.sin_addr.s_addr = bind_address->u_addr.ip4.addr;
         addr_in.sin_family = AF_INET;
         addr_in.sin_port   = htons(port);
 
-        if (bind(pending_fd, (struct sockaddr *)&addr_in, sizeof(addr_in)) < 0) {
-            int saved_errno = errno;
-
-            debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
-                     bind_address_str, port, strerror(saved_errno), saved_errno);
-
-            close(pending_fd);
-            errno = saved_errno;
-            return false;
-        }
+        addr = reinterpret_cast<struct sockaddr *>(&addr_in);
+        addr_len = sizeof(addr_in);
     } else if (bind_address->type == IPADDR_TYPE_V6) {
-        struct sockaddr_in6 addr_in = {};
+        memset(&addr_in6, 0, sizeof(addr_in6));
 
-        memcpy(addr_in.sin6_addr.un.u32_addr, bind_address->u_addr.ip6.addr, sizeof(uint32_t) * 4);
-
-        addr_in.sin6_family = AF_INET6;
-        addr_in.sin6_port   = htons(port);
+        memcpy(addr_in6.sin6_addr.un.u32_addr, bind_address->u_addr.ip6.addr, sizeof(uint32_t) * 4);
+        addr_in6.sin6_family = AF_INET6;
+        addr_in6.sin6_port   = htons(port);
 
         int v6only = 0;
-        setsockopt(pending_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only));
 
-        if (bind(pending_fd, (struct sockaddr *)&addr_in, sizeof(addr_in)) < 0) {
+        if (setsockopt(pending_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) < 0) {
             int saved_errno = errno;
 
-            debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
+            debugfln("start(bind_address=%s port=%u) setsockopt(IPV6_V6ONLY) failed: %s (%d)",
                      bind_address_str, port, strerror(saved_errno), saved_errno);
 
             close(pending_fd);
             errno = saved_errno;
             return false;
         }
+
+        addr = reinterpret_cast<struct sockaddr *>(&addr_in6);
+        addr_len = sizeof(addr_in6);
+    }
+
+    if (bind(pending_fd, addr, addr_len) < 0) {
+        int saved_errno = errno;
+
+        debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
+                 bind_address_str, port, strerror(saved_errno), saved_errno);
+
+        close(pending_fd);
+        errno = saved_errno;
+        return false;
     }
 
     if (listen(pending_fd, 5) < 0) {
@@ -332,7 +350,7 @@ void TFModbusTCPServer::tick()
             }
         }
 
-        char peer_address_str[TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH];
+        char peer_address_str[TF_NETWORK_IP_ADDR_NTOA_BUFFER_LENGTH];
         TFNetwork::ip_addr_ntoa(peer_address_str, sizeof(peer_address_str), &peer_address);
 
         debugfln("tick() accepting connection (socket_fd=%d peer_address=%s port=%u)", socket_fd, peer_address_str, port);

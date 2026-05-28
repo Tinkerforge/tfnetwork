@@ -53,6 +53,9 @@ const char *get_tf_generic_tcp_client_connect_result_name(TFGenericTCPClientConn
     case TFGenericTCPClientConnectResult::ResolveFailed:
         return "ResolveFailed";
 
+    case TFGenericTCPClientConnectResult::InvalidAddressType:
+        return "InvalidAddressType";
+
     case TFGenericTCPClientConnectResult::SocketCreateFailed:
         return "SocketCreateFailed";
 
@@ -308,7 +311,7 @@ void TFGenericTCPClient::tick()
 
             TFNetwork::resolve(host,
             [this, current_resolve_id](ip_addr_t *address, int error_number) {
-                char address_str[TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH];
+                char address_str[TF_NETWORK_IP_ADDR_NTOA_BUFFER_LENGTH];
                 TFNetwork::ip_addr_ntoa(address_str, sizeof(address_str), address);
 
                 debugfln("tick() resolved (resolve_pending=%d current_resolve_id=%u resolve_id=%u address=%s error_number=%d)",
@@ -335,16 +338,26 @@ void TFGenericTCPClient::tick()
                 return; // Waiting for resolve callback
             }
 
-            char pending_host_address_str[TF_NETWORK_IPV6_NTOA_BUFFER_LENGTH];
+            char pending_host_address_str[TF_NETWORK_IP_ADDR_NTOA_BUFFER_LENGTH];
             TFNetwork::ip_addr_ntoa(pending_host_address_str, sizeof(pending_host_address_str), &pending_host_address);
 
             debugfln("tick() connecting (host=%s pending_host_address=%s)", host, pending_host_address_str);
 
-            if (IP_IS_V4(&pending_host_address)) {
-                pending_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-            } else if (IP_IS_V6(&pending_host_address)) {
-                pending_socket_fd = socket(AF_INET6, SOCK_STREAM, 0);
+            int family;
+
+            if (pending_host_address.type == IPADDR_TYPE_V4) {
+                family = AF_INET;
             }
+            else if (pending_host_address.type == IPADDR_TYPE_V6) {
+                family = AF_INET6;
+            }
+            else {
+                abort_connect(TFGenericTCPClientConnectResult::InvalidAddressType, -1);
+                return;
+            }
+
+            pending_socket_fd = socket(family, SOCK_STREAM, 0);
+
             if (pending_socket_fd < 0) {
                 abort_connect(TFGenericTCPClientConnectResult::SocketCreateFailed, errno);
                 return;
@@ -362,39 +375,42 @@ void TFGenericTCPClient::tick()
                 return;
             }
 
+            struct sockaddr_in addr_in;
+            struct sockaddr_in6 addr_in6;
+            struct sockaddr *addr;
+            socklen_t addr_len;
+
             if (pending_host_address.type == IPADDR_TYPE_V4) {
-                struct sockaddr_in addr_in = {};
+                memset(&addr_in, 0, sizeof(addr_in));
 
                 addr_in.sin_addr.s_addr = pending_host_address.u_addr.ip4.addr;
-
                 addr_in.sin_family = AF_INET;
                 addr_in.sin_port   = htons(port);
 
-                pending_host_address_valid = false;
+                addr = reinterpret_cast<struct sockaddr *>(&addr_in);
+                addr_len = sizeof(addr_in);
+            }
+            else if (pending_host_address.type == IPADDR_TYPE_V6) {
+                memset(&addr_in6, 0, sizeof(addr_in6));
 
-                if (::connect(pending_socket_fd, reinterpret_cast<struct sockaddr *>(&addr_in), sizeof(addr_in)) < 0 && errno != EINPROGRESS) {
-                    abort_connect(TFGenericTCPClientConnectResult::SocketConnectFailed, errno);
-                    return;
-                }
-            } else if (pending_host_address.type == IPADDR_TYPE_V6) {
-                struct sockaddr_in6 addr_in = {};
+                memcpy(addr_in6.sin6_addr.un.u32_addr, &pending_host_address.u_addr.ip6.addr, sizeof(uint32_t) * 4);
+                addr_in6.sin6_family = AF_INET6;
+                addr_in6.sin6_port   = htons(port);
 
-                memcpy(addr_in.sin6_addr.un.u32_addr, &pending_host_address.u_addr.ip6.addr, sizeof(uint32_t)*4); // TODO: this is a bit scuffed. Does it work?
-
-                addr_in.sin6_family = AF_INET6;
-                addr_in.sin6_port   = htons(port);
-
-                pending_host_address_valid = false;
-
-                if (::connect(pending_socket_fd, reinterpret_cast<struct sockaddr *>(&addr_in), sizeof(addr_in)) < 0 && errno != EINPROGRESS) {
-                    abort_connect(TFGenericTCPClientConnectResult::SocketConnectFailed, errno);
-                    return;
-                }
-            } else {
-                abort_connect(TFGenericTCPClientConnectResult::ResolveFailed, EINVAL);
+                addr = reinterpret_cast<struct sockaddr *>(&addr_in6);
+                addr_len = sizeof(addr_in6);
+            }
+            else {
+                abort_connect(TFGenericTCPClientConnectResult::InvalidAddressType, -1);
                 return;
             }
 
+            if (::connect(pending_socket_fd, addr, addr_len) < 0 && errno != EINPROGRESS) {
+                abort_connect(TFGenericTCPClientConnectResult::SocketConnectFailed, errno);
+                return;
+            }
+
+            pending_host_address_valid = false;
             connect_deadline = calculate_deadline(TF_GENERIC_TCP_CLIENT_CONNECT_TIMEOUT);
         }
 

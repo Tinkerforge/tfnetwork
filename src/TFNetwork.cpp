@@ -61,24 +61,19 @@ static uint16_t get_random_uint16_dummy()
 
 TFNetworkGetRandomUint16Function TFNetwork::get_random_uint16 = get_random_uint16_dummy;
 
-char *TFNetwork::ipv4_ntoa(char *buffer, size_t buffer_length, uint32_t address)
+void TFNetwork::ip_addr_ntoa(char *buffer, size_t buffer_length, ip_addr_t *address)
 {
     if (buffer_length < 1) {
-        return buffer;
+        return;
     }
 
-    struct in_addr addr;
-    addr.s_addr = address;
-
-    return const_cast<char *>(inet_ntop(AF_INET, &addr, buffer, buffer_length));
-}
-
-char* TFNetwork::ip_addr_ntoa(char *buffer, size_t buffer_length, ip_addr_t *address) {
-    if (buffer_length < 1) {
-        return buffer;
-    }
     if (address == nullptr) {
-        return buffer;
+        buffer[0] = '\0';
+        return;
     }
-    return ipaddr_ntoa_r(address, buffer, buffer_length);
+
+    if (ipaddr_ntoa_r(address, buffer, buffer_length) == nullptr) {
+        buffer[0] = '\0';
+        return;
+    }
 }

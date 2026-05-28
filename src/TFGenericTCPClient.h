@@ -19,14 +19,14 @@
 
 #pragma once
 
-#include "lwip/ip_addr.h"
 
-#include <TFTools/Micros.h>
-#include <functional>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <lwip/ip_addr.h>
+#include <functional>
+#include <TFTools/Micros.h>
 
 // configuration
 #ifndef TF_GENERIC_TCP_CLIENT_MAX_TICK_DURATION
@@ -50,6 +50,7 @@ enum class TFGenericTCPClientConnectResult
     AlreadyConnected,
     AbortRequested,
     ResolveFailed,            // errno as received from resolve callback
+    InvalidAddressType,
     SocketCreateFailed,       // errno
     SocketGetFlagsFailed,     // errno
     SocketSetFlagsFailed,     // errno
@@ -140,19 +141,19 @@ protected:
     void disconnect(TFGenericTCPClientDisconnectReason reason, int error_number);
 
     TFGenericTCPClientTransferHook *transfer_hook_head = nullptr;
-    bool non_reentrant            = false;
-    char *host                    = nullptr;
-    uint16_t port                 = 0;
+    bool non_reentrant                                 = false;
+    char *host                                         = nullptr;
+    uint16_t port                                      = 0;
     TFGenericTCPClientConnectCallback connect_callback;
     TFGenericTCPClientDisconnectCallback pending_disconnect_callback;
     TFGenericTCPClientDisconnectCallback disconnect_callback;
-    bool resolve_pending          = false;
-    uint32_t resolve_id           = 0;
-    ip_addr_t pending_host_address{};
-    bool pending_host_address_valid = false;
-    int pending_socket_fd         = -1;
-    micros_t connect_deadline     = 0_s;
-    int socket_fd                 = -1;
+    bool resolve_pending                               = false;
+    uint32_t resolve_id                                = 0;
+    ip_addr_t pending_host_address;
+    bool pending_host_address_valid                    = false;
+    int pending_socket_fd                              = -1;
+    micros_t connect_deadline                          = 0_s;
+    int socket_fd                                      = -1;
 };
 
 class TFGenericTCPSharedClient
