@@ -308,7 +308,7 @@ void TFGenericTCPClientPool::release(size_t slot_index, size_t share_index, TFGe
     TFGenericTCPClientPoolSlot *slot = slots[slot_index];
 
     if (slot == nullptr) {
-#if TF_NETWORK_DEBUG_LOG
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 0
         if (reason == TFGenericTCPClientDisconnectReason::Requested && error_number == -2) {
             debugfln("release(slot_index=%zu share_index=%zu disconnect=%d) invalid slot",
                      slot_index, share_index, disconnect ? 1 : 0);
@@ -325,7 +325,7 @@ void TFGenericTCPClientPool::release(size_t slot_index, size_t share_index, TFGe
     TFGenericTCPClientPoolShare *share = slot->shares[share_index];
 
     if (share == nullptr) {
-#if TF_NETWORK_DEBUG_LOG
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 0
         if (reason == TFGenericTCPClientDisconnectReason::Requested && error_number == -2) {
             debugfln("release(slot_index=%zu share_index=%zu disconnect=%d) invalid share",
                      slot_index, share_index, disconnect ? 1 : 0);
@@ -339,7 +339,7 @@ void TFGenericTCPClientPool::release(size_t slot_index, size_t share_index, TFGe
         return;
     }
 
-#if TF_NETWORK_DEBUG_LOG
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 0
     if (reason == TFGenericTCPClientDisconnectReason::Requested && error_number == -2) {
         debugfln("release(slot_index=%zu share_index=%zu disconnect=%d)",
                  slot_index, share_index, disconnect ? 1 : 0);
@@ -364,7 +364,7 @@ void TFGenericTCPClientPool::release(size_t slot_index, size_t share_index, TFGe
     delete share;
 
     if (slot->share_count == 0) {
-#if TF_NETWORK_DEBUG_LOG
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 0
         if (reason == TFGenericTCPClientDisconnectReason::Requested && error_number == -2) {
             debugfln("release(slot_index=%zu share_index=%zu reason=%s error_number=%d disconnect=%d) marking inactive slot for deletion (client=%p host=%s port=%u)",
                      slot_index, share_index, get_tf_generic_tcp_client_disconnect_reason_name(reason), error_number, disconnect ? 1 : 0,

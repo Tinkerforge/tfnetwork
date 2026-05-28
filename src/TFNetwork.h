@@ -24,7 +24,11 @@
 #include <stdlib.h>
 #include <functional>
 
-#if TF_NETWORK_DEBUG_LOG
+// TF_NETWORK_DEBUG_LOG 0 or undefined = debug logging is off
+// TF_NETWORK_DEBUG_LOG 1 = debug logging is on
+// TF_NETWORK_DEBUG_LOG 2 = debug logging is on and includes all sent and received data
+
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 0
 #define tf_network_debugfln(fmt, ...) TFNetwork::logfln(fmt __VA_OPT__(,) __VA_ARGS__)
 #else
 #define tf_network_debugfln(fmt, ...) do {} while (0)

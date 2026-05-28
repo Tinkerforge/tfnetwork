@@ -482,32 +482,88 @@ bool TFGenericTCPClient::send(const uint8_t *buffer, size_t length)
         }
     }
 
-    size_t buffer_send = 0;
+    size_t offset = 0;
     size_t tries_remaining = TF_GENERIC_TCP_CLIENT_MAX_SEND_TRIES;
+    bool success = true;
+    int saved_errno = 0;
 
-    while (tries_remaining > 0 && buffer_send < length) {
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 1
+    char *buffer_str = static_cast<char *>(malloc(length * 3));
+    const char * const alphabet = "0123456789abcdef";
+#endif
+
+    while (tries_remaining > 0 && offset < length) {
         --tries_remaining;
 
-        ssize_t result = ::send(socket_fd, buffer + buffer_send, length - buffer_send, MSG_NOSIGNAL);
+        errno = 0; // clear errno, because it will be logged unconditionally
+        ssize_t result = ::send(socket_fd, buffer + offset, length - offset, MSG_NOSIGNAL);
+        saved_errno = errno;
+
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 1
+        for (size_t i = 0; i < length - offset; ++i) {
+            uint8_t byte = buffer[offset + i];
+
+            buffer_str[i * 3    ] = alphabet[(byte >> 4) & 0x0f];
+            buffer_str[i * 3 + 1] = alphabet[ byte       & 0x0f];
+            buffer_str[i * 3 + 2] = ',';
+        }
+
+        buffer_str[(length - offset - 1) * 3 + 2] = '\0';
+
+        debugfln("send(buffer=%p length=%zu) sent (tries_remaining=%zu offset=%zu length_remaining=%zu buffer=%s result=%zd errno=%d)",
+                 static_cast<const void *>(buffer), length, tries_remaining, offset, length - offset, buffer_str, result, saved_errno);
+#endif
 
         if (result < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
                 continue;
             }
 
-            return false;
+            success = false;
+            break;
         }
 
-        buffer_send += result;
+        offset += result;
     }
 
-    return true;
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 1
+    free(buffer_str);
+#endif
+
+    errno = saved_errno;
+    return success;
 }
 
 ssize_t TFGenericTCPClient::recv(uint8_t *buffer, size_t length)
 {
+    errno = 0; // clear errno, because it will be logged unconditionally
     ssize_t result = ::recv(socket_fd, buffer, length, 0);
     int saved_errno = errno;
+
+#if defined(TF_NETWORK_DEBUG_LOG) && TF_NETWORK_DEBUG_LOG > 1
+    if (result <= 0) {
+        if (result == 0 || (saved_errno != EAGAIN && saved_errno != EWOULDBLOCK)) {
+            debugfln("recv(buffer=%p length=%zu) received (result=%zd errno=%d)", static_cast<void *>(buffer), length, result, saved_errno);
+        }
+    }
+    else {
+        char *buffer_str = static_cast<char *>(malloc(length * 3));
+        const char * const alphabet = "0123456789abcdef";
+
+        for (size_t i = 0; i < static_cast<size_t>(result); ++i) {
+            uint8_t byte = buffer[i];
+
+            buffer_str[i * 3    ] = alphabet[(byte >> 4) & 0x0f];
+            buffer_str[i * 3 + 1] = alphabet[ byte       & 0x0f];
+            buffer_str[i * 3 + 2] = ',';
+        }
+
+        buffer_str[static_cast<size_t>(result - 1) * 3 + 2] = '\0';
+
+        debugfln("recv(buffer=%p length=%zu) received (buffer=%s result=%zd errno=%d)", static_cast<void *>(buffer), length, buffer_str, result, saved_errno);
+        free(buffer_str);
+    }
+#endif
 
     if (result > 0 && transfer_hook_head != nullptr) {
         TFGenericTCPClientTransferHook *hook = transfer_hook_head;
