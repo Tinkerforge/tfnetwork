@@ -281,12 +281,19 @@ void TFModbusTCPClient::tick_hook()
 {
     check_pending_transaction_timeout();
 
+    if (pending_transaction != nullptr && pending_transaction_ticks < UINT32_MAX) {
+        ++pending_transaction_ticks;
+    }
+
     if (pending_transaction == nullptr && scheduled_transaction_head != nullptr) {
         pending_transaction          = scheduled_transaction_head;
         scheduled_transaction_head   = scheduled_transaction_head->next;
         pending_transaction->next    = nullptr;
         pending_transaction_id       = (next_transaction_id++) & pending_transaction->transaction_id_mask;
         pending_transaction_deadline = calculate_deadline(pending_transaction->timeout);
+        pending_transaction_ticks    = 0;
+        pending_transaction_recvs    = 0;
+        pending_transaction_since    = now_us();
 
         TFModbusTCPRequest request;
         size_t payload_length;
@@ -360,7 +367,6 @@ void TFModbusTCPClient::tick_hook()
             }
 
             payload_length = offsetof(TFModbusTCPRequestPayload, sentinel);
-
             break;
 
         default:
@@ -402,6 +408,10 @@ bool TFModbusTCPClient::receive_hook()
         if (result == 0) {
             disconnect(TFGenericTCPClientDisconnectReason::DisconnectedByPeer, -1);
             return false;
+        }
+
+        if (pending_transaction != nullptr && pending_transaction_recvs < UINT32_MAX) {
+            ++pending_transaction_recvs;
         }
 
         pending_response_header_used += result;
@@ -756,6 +766,10 @@ ssize_t TFModbusTCPClient::receive_response_payload(size_t length)
         return -1;
     }
 
+    if (pending_transaction != nullptr && pending_transaction_recvs < UINT32_MAX) {
+        ++pending_transaction_recvs;
+    }
+
     pending_response_payload_used += result;
     return result;
 }
@@ -770,6 +784,13 @@ void TFModbusTCPClient::finish_pending_transaction(uint16_t transaction_id, TFMo
 void TFModbusTCPClient::finish_pending_transaction(TFModbusTCPClientTransactionResult result, const char *error_message)
 {
     if (pending_transaction != nullptr) {
+        debugfln("finish_pending_transaction(result=%s, error_message=%s) finish after %u ticks, %u recvs, %u ms",
+                 get_tf_modbus_tcp_client_transaction_result_name(result),
+                 TFNetwork::printf_safe(error_message),
+                 pending_transaction_ticks,
+                 pending_transaction_recvs,
+                 (now_us() - pending_transaction_since).to<millis_t>().as<uint32_t>());
+
         TFModbusTCPClientTransactionCallback callback = std::move(pending_transaction->callback);
         pending_transaction->callback = nullptr;
 
@@ -805,7 +826,18 @@ void TFModbusTCPClient::finish_all_transactions(TFModbusTCPClientTransactionResu
 void TFModbusTCPClient::check_pending_transaction_timeout()
 {
     if (pending_transaction != nullptr && deadline_elapsed(pending_transaction_deadline)) {
-        finish_pending_transaction(TFModbusTCPClientTransactionResult::Timeout, nullptr);
+        debugfln("check_pending_transaction_timeout() timeout after %u ticks, %u recvs, %u ms",
+                 pending_transaction_ticks,
+                 pending_transaction_recvs,
+                 (now_us() - pending_transaction_since).to<millis_t>().as<uint32_t>());
+
+        char error_message[128];
+        snprintf(error_message, sizeof(error_message), "After %u ticks, %u recvs, %u ms",
+                 pending_transaction_ticks,
+                 pending_transaction_recvs,
+                 (now_us() - pending_transaction_since).to<millis_t>().as<uint32_t>());
+
+        finish_pending_transaction(TFModbusTCPClientTransactionResult::Timeout, error_message);
     }
 }
 
