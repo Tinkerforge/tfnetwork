@@ -114,6 +114,7 @@ bool TFModbusTCPServer::start(uint32_t bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) setsockopt(SO_REUSEADDR) failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
+        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -126,6 +127,7 @@ bool TFModbusTCPServer::start(uint32_t bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) fcntl(F_GETFL) failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
+        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -136,6 +138,7 @@ bool TFModbusTCPServer::start(uint32_t bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) fcntl(F_SETFL) failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
+        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -154,6 +157,7 @@ bool TFModbusTCPServer::start(uint32_t bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) bind() failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
+        close(pending_fd);
         errno = saved_errno;
         return false;
     }
@@ -164,6 +168,7 @@ bool TFModbusTCPServer::start(uint32_t bind_address, uint16_t port,
         debugfln("start(bind_address=%s port=%u) listen() failed: %s (%d)",
                  bind_address_str, port, strerror(saved_errno), saved_errno);
 
+        close(pending_fd);
         errno = saved_errno;
         return false;
     }
