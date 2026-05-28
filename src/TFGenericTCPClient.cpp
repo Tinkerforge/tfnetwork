@@ -465,6 +465,11 @@ void TFGenericTCPClient::close()
 
 bool TFGenericTCPClient::send(const uint8_t *buffer, size_t length)
 {
+    if (socket_fd < 0) {
+        errno = EBADF;
+        return false;
+    }
+
     if (length > 0 && transfer_hook_head != nullptr) {
         TFGenericTCPClientTransferHook *hook = transfer_hook_head;
 
