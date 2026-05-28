@@ -502,6 +502,7 @@ bool TFGenericTCPClient::send(const uint8_t *buffer, size_t length)
 ssize_t TFGenericTCPClient::recv(uint8_t *buffer, size_t length)
 {
     ssize_t result = ::recv(socket_fd, buffer, length, 0);
+    int saved_errno = errno;
 
     if (result > 0 && transfer_hook_head != nullptr) {
         TFGenericTCPClientTransferHook *hook = transfer_hook_head;
@@ -515,6 +516,7 @@ ssize_t TFGenericTCPClient::recv(uint8_t *buffer, size_t length)
         }
     }
 
+    errno = saved_errno;
     return result;
 }
 
