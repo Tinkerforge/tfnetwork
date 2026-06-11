@@ -86,11 +86,11 @@ const char *get_tf_modbus_tcp_client_transaction_result_name(TFModbusTCPClientTr
     case TFModbusTCPClientTransactionResult::Timeout:
         return "Timeout";
 
-    case TFModbusTCPClientTransactionResult::ResponseShorterThanMinimum:
-        return "ResponseShorterThanMinimum";
+    case TFModbusTCPClientTransactionResult::ResponseFrameShorterThanMinimum:
+        return "ResponseFrameShorterThanMinimum";
 
-    case TFModbusTCPClientTransactionResult::ResponseLongerThanMaximum:
-        return "ResponseLongerThanMaximum";
+    case TFModbusTCPClientTransactionResult::ResponseFrameLongerThanMaximum:
+        return "ResponseFrameLongerThanMaximum";
 
     case TFModbusTCPClientTransactionResult::ResponseUnitIDMismatch:
         return "ResponseUnitIDMismatch";
@@ -432,8 +432,8 @@ bool TFModbusTCPClient::recv_hook()
             debugfln("recv_hook() frame too long (pending_response.header.frame_length=%u max_response_frame_length=%u)",
                      pending_response.header.frame_length, TF_MODBUS_TCP_MAX_RESPONSE_FRAME_LENGTH);
 
-            snprintf(error_message, sizeof(error_message), "Actual length is %u, maximum is %u", pending_response.header.frame_length, TF_MODBUS_TCP_MAX_RESPONSE_FRAME_LENGTH);
-            finish_pending_transaction(pending_response.header.transaction_id, TFModbusTCPClientTransactionResult::ResponseLongerThanMaximum, error_message);
+            snprintf(error_message, sizeof(error_message), "Actual frame length is %u, maximum is %u", pending_response.header.frame_length, TF_MODBUS_TCP_MAX_RESPONSE_FRAME_LENGTH);
+            finish_pending_transaction(pending_response.header.transaction_id, TFModbusTCPClientTransactionResult::ResponseFrameLongerThanMaximum, error_message);
             disconnect(TFGenericTCPClientDisconnectReason::ProtocolError, -1);
             return false;
         }
@@ -486,8 +486,8 @@ bool TFModbusTCPClient::recv_hook()
         debugfln("recv_hook() frame too short (pending_response.header.frame_length=%u min_response_frame_length=%u",
                  pending_response.header.frame_length, TF_MODBUS_TCP_MIN_RESPONSE_FRAME_LENGTH);
 
-        snprintf(error_message, sizeof(error_message), "Actual length is %u, minimum is %u", pending_response.header.frame_length, TF_MODBUS_TCP_MIN_RESPONSE_FRAME_LENGTH);
-        finish_pending_transaction(pending_response.header.transaction_id, TFModbusTCPClientTransactionResult::ResponseShorterThanMinimum, error_message);
+        snprintf(error_message, sizeof(error_message), "Actual frame length is %u, minimum is %u", pending_response.header.frame_length, TF_MODBUS_TCP_MIN_RESPONSE_FRAME_LENGTH);
+        finish_pending_transaction(pending_response.header.transaction_id, TFModbusTCPClientTransactionResult::ResponseFrameShorterThanMinimum, error_message);
         disconnect(TFGenericTCPClientDisconnectReason::ProtocolError, -1);
         return false;
     }
