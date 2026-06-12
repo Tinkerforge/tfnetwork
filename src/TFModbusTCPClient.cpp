@@ -794,12 +794,12 @@ void TFModbusTCPClient::finish_pending_transaction(uint16_t transaction_id, TFMo
 void TFModbusTCPClient::finish_pending_transaction(TFModbusTCPClientTransactionResult result, const char *error_message)
 {
     if (pending_transaction != nullptr) {
-        debugfln("finish_pending_transaction(result=%s, error_message=%s) finish after %u ticks, %u recvs, %u ms",
+        debugfln("finish_pending_transaction(result=%s, error_message=%s) finish after %zu ticks, %zu recvs, %zu ms",
                  get_tf_modbus_tcp_client_transaction_result_name(result),
                  TFNetwork::printf_safe(error_message),
                  pending_transaction_ticks,
                  pending_transaction_recvs,
-                 (now_us() - pending_transaction_since).to<millis_t>().as<uint32_t>());
+                 (now_us() - pending_transaction_since).to<millis_t>().as<size_t>());
 
         TFModbusTCPClientTransactionCallback callback = std::move(pending_transaction->callback);
         pending_transaction->callback = nullptr;
@@ -836,16 +836,16 @@ void TFModbusTCPClient::finish_all_transactions(TFModbusTCPClientTransactionResu
 void TFModbusTCPClient::check_pending_transaction_timeout()
 {
     if (pending_transaction != nullptr && deadline_elapsed(pending_transaction_deadline)) {
-        debugfln("check_pending_transaction_timeout() timeout after %u ticks, %u recvs, %u ms",
+        debugfln("check_pending_transaction_timeout() timeout after %zu ticks, %zu recvs, %zu ms",
                  pending_transaction_ticks,
                  pending_transaction_recvs,
-                 (now_us() - pending_transaction_since).to<millis_t>().as<uint32_t>());
+                 (now_us() - pending_transaction_since).to<millis_t>().as<size_t>());
 
         char error_message[128];
-        snprintf(error_message, sizeof(error_message), "After %u ticks, %u recvs, %u ms",
+        snprintf(error_message, sizeof(error_message), "After %zu ticks, %zu recvs, %zu ms",
                  pending_transaction_ticks,
                  pending_transaction_recvs,
-                 (now_us() - pending_transaction_since).to<millis_t>().as<uint32_t>());
+                 (now_us() - pending_transaction_since).to<millis_t>().as<size_t>());
 
         finish_pending_transaction(TFModbusTCPClientTransactionResult::Timeout, error_message);
     }

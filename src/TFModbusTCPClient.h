@@ -114,8 +114,8 @@ private:
     TFModbusTCPClientTransaction *pending_transaction        = nullptr;
     uint16_t pending_transaction_id                          = 0;
     micros_t pending_transaction_deadline                    = 0_s;
-    uint32_t pending_transaction_ticks                       = 0;
-    uint32_t pending_transaction_recvs                       = 0;
+    size_t pending_transaction_ticks                         = 0;
+    size_t pending_transaction_recvs                         = 0;
     micros_t pending_transaction_since                       = 0_s;
     TFModbusTCPClientTransaction *scheduled_transaction_head = nullptr;
     TFModbusTCPResponse pending_response;
